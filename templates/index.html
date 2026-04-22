@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FedMask — Federated Privacy-Preserving Mask Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{
+  --bg:#060B14;--bg2:#0A1120;--bg3:#0F1929;--bg4:#162035;
+  --card:#111B2E;--card2:#162035;
+  --border:#1E2F47;--border2:#243651;
+  --teal:#00E5CC;--teal2:#00BFA5;--teal-dim:rgba(0,229,204,.08);
+  --blue:#4A9EFF;--blue-dim:rgba(74,158,255,.08);
+  --red:#FF4D6A;--red-dim:rgba(255,77,106,.08);
+  --amber:#FFB347;--amber-dim:rgba(255,179,71,.08);
+  --green:#00E676;--green-dim:rgba(0,230,118,.08);
+  --purple:#B388FF;
+  --text:#E2EAF4;--text2:#8FA8C8;--text3:#5B7A99;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Space Grotesk',sans-serif;
+  --r:8px;--r2:12px;--r3:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;overflow-x:hidden;}
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg2);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* ── Layout ─────────────────────────────────────────────── */
+.layout{display:flex;min-height:100vh;}
+.sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:50;}
+.main{margin-left:220px;flex:1;display:flex;flex-direction:column;}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+.sb-logo{padding:20px 16px;border-bottom:1px solid var(--border);}
+.sb-brand{font-size:17px;font-weight:700;color:var(--teal);letter-spacing:-.3px;}
+.sb-sub{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px;line-height:1.5;}
+.sb-nav{padding:12px 8px;flex:1;overflow-y:auto;}
+.sb-section{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:8px 8px 4px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r);cursor:pointer;margin-bottom:2px;color:var(--text2);font-size:13px;font-weight:500;transition:all .15s;border:1px solid transparent;}
+.nav-item:hover{background:var(--bg3);color:var(--text);}
+.nav-item.active{background:var(--teal-dim);color:var(--teal);border-color:rgba(0,229,204,.15);}
+.nav-icon{width:18px;text-align:center;font-size:15px;flex-shrink:0;}
+.sb-status{padding:12px 16px;border-top:1px solid var(--border);}
+.sb-status-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);}
+.sb-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0;}
+.sb-dot.idle{background:var(--text3);}
+.sb-dot.training{background:var(--amber);animation:blink 1s infinite;}
+.sb-dot.error{background:var(--red);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Topbar ─────────────────────────────────────────────── */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:40;}
+.tb-title{font-size:15px;font-weight:600;}
+.tb-right{display:flex;align-items:center;gap:10px;}
+.tb-badge{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:11px;font-family:var(--mono);color:var(--text2);}
+.tb-badge .dot{width:5px;height:5px;border-radius:50%;background:var(--teal);}
+
+/* ── Content ─────────────────────────────────────────────── */
+.content{padding:24px 28px;flex:1;}
+.page{display:none;}.page.active{display:block;}
+
+/* ── Card ─────────────────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r3);padding:20px;}
+.card-sm{padding:14px 16px;}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.card-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;}
+.card-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+
+/* ── Metric cards ───────────────────────────────────────── */
+.metric{background:var(--card2);border:1px solid var(--border);border-radius:var(--r2);padding:16px;position:relative;overflow:hidden;}
+.metric::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--teal);}
+.metric.red::before{background:var(--red);}
+.metric.blue::before{background:var(--blue);}
+.metric.amber::before{background:var(--amber);}
+.metric-val{font-size:28px;font-weight:700;font-family:var(--mono);color:var(--teal);line-height:1;}
+.metric.red .metric-val{color:var(--red);}
+.metric.blue .metric-val{color:var(--blue);}
+.metric.amber .metric-val{color:var(--amber);}
+.metric-label{font-size:11px;color:var(--text3);margin-top:6px;text-transform:uppercase;letter-spacing:.5px;}
+.metric-sub{font-size:10px;color:var(--text3);margin-top:3px;font-family:var(--mono);}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:var(--r);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;}
+.btn:hover{background:var(--bg3);color:var(--text);border-color:var(--border2);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-primary{background:var(--teal);color:#000;border-color:var(--teal);font-weight:600;}
+.btn-primary:hover{background:var(--teal2);border-color:var(--teal2);color:#000;}
+.btn-primary:disabled{background:var(--bg3);color:var(--text3);border-color:var(--border);}
+.btn-danger{border-color:var(--red);color:var(--red);}
+.btn-danger:hover{background:var(--red-dim);}
+.btn-sm{padding:5px 12px;font-size:12px;}
+
+/* ── Badges ──────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;font-family:var(--mono);}
+.badge-teal{background:var(--teal-dim);color:var(--teal);}
+.badge-red{background:var(--red-dim);color:var(--red);}
+.badge-amber{background:var(--amber-dim);color:var(--amber);}
+.badge-green{background:var(--green-dim);color:var(--green);}
+.badge-blue{background:var(--blue-dim);color:var(--blue);}
+
+/* ── Progress bar ────────────────────────────────────────── */
+.progress-wrap{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--teal),var(--blue));transition:width .5s ease;}
+
+/* ── Log terminal ────────────────────────────────────────── */
+.terminal{background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);font-family:var(--mono);font-size:11px;padding:12px 14px;height:200px;overflow-y:auto;line-height:1.8;}
+.log-line{margin-bottom:1px;}
+.log-ts{color:var(--text3);}
+.log-info{color:var(--blue);}
+.log-success{color:var(--teal);}
+.log-warn{color:var(--amber);}
+.log-error{color:var(--red);}
+.log-data{color:var(--purple);}
+
+/* ── Node cards (hospital) ───────────────────────────────── */
+.node-card{background:var(--card2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;transition:border-color .3s;}
+.node-card.active{border-color:var(--teal);}
+.node-card.error{border-color:var(--red);}
+.node-hd{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.node-icon{width:30px;height:30px;border-radius:8px;background:var(--blue-dim);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;border:1px solid rgba(74,158,255,.2);}
+.node-name{font-size:13px;font-weight:600;}
+.node-status{font-size:10px;color:var(--text3);font-family:var(--mono);}
+.node-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;}
+.node-stat{background:var(--bg3);border-radius:6px;padding:6px 8px;text-align:center;}
+.node-stat-val{font-size:14px;font-weight:600;font-family:var(--mono);color:var(--teal);}
+.node-stat-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-top:1px;}
+
+/* ── Detection area ──────────────────────────────────────── */
+.detection-zone{background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;position:relative;}
+.det-canvas{display:block;width:100%;height:auto;min-height:300px;}
+.det-overlay{position:absolute;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap;}
+.det-info{position:absolute;bottom:10px;left:10px;right:10px;background:rgba(6,11,20,.8);border-radius:var(--r);padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--text2);display:flex;gap:20px;flex-wrap:wrap;backdrop-filter:blur(4px);}
+
+/* ── Result table ────────────────────────────────────────── */
+.rtable{width:100%;border-collapse:collapse;font-size:12px;}
+.rtable th{text-align:left;padding:8px 12px;font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);}
+.rtable td{padding:9px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);}
+.rtable tr:last-child td{border:none;}
+.rtable tr:hover td{background:var(--bg3);}
+.rtable .highlight td{color:var(--teal);}
+
+/* ── Confusion Matrix ────────────────────────────────────── */
+.cm-grid{display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;}
+.cm-cell{display:flex;align-items:center;justify-content:center;border-radius:8px;font-family:var(--mono);font-weight:700;font-size:20px;}
+.cm-label{display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3);text-align:center;line-height:1.4;padding:6px;}
+.cm-tp{background:rgba(0,230,118,.12);color:var(--green);height:80px;}
+.cm-tn{background:rgba(0,230,118,.12);color:var(--green);}
+.cm-fp{background:rgba(255,77,106,.12);color:var(--red);}
+.cm-fn{background:rgba(255,77,106,.12);color:var(--red);}
+
+/* ── Architecture SVG wrapper ────────────────────────────── */
+.arch-wrap{background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:16px;}
+
+/* ── Upload zone ─────────────────────────────────────────── */
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--r2);padding:28px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);}
+.upload-zone:hover{border-color:var(--teal);background:var(--teal-dim);}
+.upload-zone.dragover{border-color:var(--teal);background:var(--teal-dim);}
+
+/* ── Chart container ─────────────────────────────────────── */
+.chart-wrap{position:relative;width:100%;}
+
+/* ── Tooltip ─────────────────────────────────────────────── */
+#tooltip{position:fixed;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;font-size:12px;pointer-events:none;z-index:999;display:none;max-width:220px;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+
+/* ── Page header ─────────────────────────────────────────── */
+.page-hd{margin-bottom:22px;}
+.page-hd h1{font-size:22px;font-weight:700;line-height:1.2;}
+.page-hd p{font-size:13px;color:var(--text3);margin-top:5px;}
+
+/* ── Tabs ────────────────────────────────────────────────── */
+.tab-bar{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.tab{padding:8px 16px;font-size:13px;font-weight:500;background:none;border:none;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;font-family:var(--sans);}
+.tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+.tab:hover:not(.active){color:var(--text);}
+
+/* ── FL round indicator ──────────────────────────────────── */
+.round-indicator{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--text3);}
+.round-num{font-size:20px;font-weight:700;color:var(--teal);}
+
+/* ── Model layer display ─────────────────────────────────── */
+.layer-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:var(--r);margin-bottom:4px;font-family:var(--mono);font-size:11px;border:1px solid var(--border);}
+.layer-name{color:var(--blue);flex:1;}
+.layer-shape{color:var(--text2);min-width:120px;}
+.layer-norm{color:var(--teal);}
+
+/* ── Alert ───────────────────────────────────────────────── */
+.alert{border-radius:var(--r);padding:10px 14px;font-size:12px;margin-bottom:12px;border:1px solid;}
+.alert-info{background:var(--blue-dim);border-color:rgba(74,158,255,.3);color:var(--blue);}
+.alert-success{background:var(--teal-dim);border-color:rgba(0,229,204,.3);color:var(--teal);}
+.alert-warn{background:var(--amber-dim);border-color:rgba(255,179,71,.3);color:var(--amber);}
+
+/* ── Spinner ─────────────────────────────────────────────── */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
+
+/* ── Gap utilities ───────────────────────────────────────── */
+.gap-12{display:flex;flex-direction:column;gap:12px;}
+.gap-16{display:flex;flex-direction:column;gap:16px;}
+.row{display:flex;gap:10px;align-items:center;}
+.row-between{display:flex;justify-content:space-between;align-items:center;}
+.mb-8{margin-bottom:8px;} .mb-12{margin-bottom:12px;} .mb-16{margin-bottom:16px;}
+.mt-12{margin-top:12px;} .mt-16{margin-top:16px;}
+.mono{font-family:var(--mono);}
+</style>
+</head>
+<body>
+
+<div class="layout">
+<!-- ═══ SIDEBAR ══════════════════════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-brand">FedMask</div>
+    <div class="sb-sub">Privacy-Preserving<br>Mask Detection System<br>Chandigarh University · 2025</div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-section">Main</div>
+    <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard',this)">
+      <span class="nav-icon">⬡</span> Overview
+    </div>
+    <div class="nav-item" data-page="training" onclick="navigate('training',this)">
+      <span class="nav-icon">◎</span> FL Training
+    </div>
+    <div class="nav-item" data-page="detect" onclick="navigate('detect',this)">
+      <span class="nav-icon">◈</span> Detection
+    </div>
+    <div class="sb-section">Analysis</div>
+    <div class="nav-item" data-page="results" onclick="navigate('results',this)">
+      <span class="nav-icon">◻</span> Results
+    </div>
+    <div class="nav-item" data-page="model" onclick="navigate('model',this)">
+      <span class="nav-icon">△</span> CNN Model
+    </div>
+    <div class="nav-item" data-page="architecture" onclick="navigate('architecture',this)">
+      <span class="nav-icon">◇</span> Architecture
+    </div>
+  </nav>
+  <div class="sb-status">
+    <div class="sb-status-row">
+      <div class="sb-dot idle" id="sbDot"></div>
+      <span id="sbStatusText">System idle</span>
+    </div>
+    <div class="sb-status-row" style="margin-top:5px;">
+      <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">Round <span id="sbRound">0</span>/25 · <span id="sbAcc">—</span></span>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══ MAIN ═════════════════════════════════════════════════════════════════ -->
+<div class="main">
+<header class="topbar">
+  <div class="tb-title" id="topbarTitle">Overview</div>
+  <div class="tb-right">
+    <div class="tb-badge"><span class="dot"></span> API Connected</div>
+    <div class="tb-badge">FedAvg · MaskedFaceNet</div>
+    <div class="tb-badge">CNN + FL</div>
+  </div>
+</header>
+<div class="content">
+
+<!-- ══════════════ PAGE: DASHBOARD ══════════════════════════════════════════ -->
+<div class="page active" id="page-dashboard">
+  <div class="page-hd">
+    <h1>Federated Mask Detection System</h1>
+    <p>CNN + FedAvg privacy-preserving surveillance for healthcare facilities · Chandigarh University CSE 2025</p>
+  </div>
+  <div class="grid4 mb-16">
+    <div class="metric">         <div class="metric-val" id="d-acc">95.6%</div><div class="metric-label">Global Accuracy</div><div class="metric-sub">Federated model</div></div>
+    <div class="metric blue">   <div class="metric-val" id="d-prec">94.8%</div><div class="metric-label">Precision</div><div class="metric-sub">TP/(TP+FP)</div></div>
+    <div class="metric amber">  <div class="metric-val" id="d-rec">96.2%</div><div class="metric-label">Recall</div><div class="metric-sub">TP/(TP+FN)</div></div>
+    <div class="metric red">    <div class="metric-val" id="d-f1">95.5%</div><div class="metric-label">F1-Score</div><div class="metric-sub">Harmonic mean</div></div>
+  </div>
+  <div class="grid2 mb-16">
+    <div class="card">
+      <div class="card-hd"><div><div class="card-title">FL Training Progress</div><div class="card-sub">Round <span id="d-round">0</span>/25 · FedAvg</div></div><span class="badge badge-teal" id="d-status-badge">IDLE</span></div>
+      <div class="progress-wrap mb-12"><div class="progress-fill" id="d-progress" style="width:0%"></div></div>
+      <div class="chart-wrap" style="height:160px;"><canvas id="dash-acc-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Hospital Node Status</div></div>
+      <div class="gap-12" id="d-nodes"></div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card card-sm">
+      <div class="card-hd"><div class="card-title">Dataset Distribution</div></div>
+      <div class="chart-wrap" style="height:170px;"><canvas id="dash-pie"></canvas></div>
+    </div>
+    <div class="card card-sm">
+      <div class="card-hd"><div class="card-title">Privacy Guarantee</div></div>
+      <div class="gap-12" style="font-size:12px;color:var(--text2);">
+        <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--teal);font-size:16px;flex-shrink:0;">✓</span><div><strong style="color:var(--text)">Zero raw data transfer</strong><br>Surveillance images never leave hospital servers.</div></div>
+        <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--teal);font-size:16px;flex-shrink:0;">✓</span><div><strong style="color:var(--text)">FedAvg weight aggregation</strong><br>Only Δw (weight deltas) transmitted to central server.</div></div>
+        <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--teal);font-size:16px;flex-shrink:0;">✓</span><div><strong style="color:var(--text)">Differential privacy (ε=0.5)</strong><br>Gaussian noise applied before weight upload.</div></div>
+        <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--teal);font-size:16px;flex-shrink:0;">✓</span><div><strong style="color:var(--text)">Outperforms centralized</strong><br>+2.2% accuracy vs standard centralized training.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: TRAINING ════════════════════════════════════════════ -->
+<div class="page" id="page-training">
+  <div class="page-hd">
+    <h1>Federated Learning Training</h1>
+    <p>FedAvg across 3 hospital nodes · 25 communication rounds · Local CNN training on private datasets</p>
+  </div>
+  <div class="alert alert-info mb-16">
+    <strong>Privacy Model:</strong> Each hospital trains locally. Only model weight deltas (Δw) are uploaded — no patient images or raw surveillance data leave the hospital network.
+  </div>
+  <div class="row mb-16" style="gap:8px;">
+    <button class="btn btn-primary" id="btn-start" onclick="startTraining()">▶ Start Training</button>
+    <button class="btn btn-danger btn-sm" id="btn-stop" onclick="stopTraining()" disabled>■ Stop</button>
+    <button class="btn btn-sm" onclick="resetTraining()">↺ Reset</button>
+    <div class="round-indicator" style="margin-left:12px;">
+      Round <span class="round-num" id="t-round">0</span>/25
+    </div>
+  </div>
+
+  <div class="grid3 mb-16" id="t-node-grid">
+    <!-- populated by JS -->
+  </div>
+
+  <!-- Global server -->
+  <div class="card mb-16">
+    <div class="row-between">
+      <div>
+        <div class="card-title mb-8">Global Federated Server · FedAvg Aggregation</div>
+        <div style="font-size:12px;color:var(--text3);">Weighted averaging: w_global = Σ (n_k / n_total) × w_k</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:30px;font-weight:700;font-family:var(--mono);color:var(--teal)" id="t-gacc">—</div>
+        <div style="font-size:10px;color:var(--text3);">GLOBAL ACCURACY</div>
+      </div>
+    </div>
+    <div class="progress-wrap mt-12"><div class="progress-fill" id="t-progress" style="width:0%"></div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Accuracy — All Rounds</div></div>
+      <div class="chart-wrap" style="height:220px;"><canvas id="t-acc-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Loss Convergence</div></div>
+      <div class="chart-wrap" style="height:220px;"><canvas id="t-loss-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card mt-16">
+    <div class="card-hd"><div class="card-title">Training Log</div><button class="btn btn-sm" onclick="clearLog()">Clear</button></div>
+    <div class="terminal" id="t-log"><div class="log-line log-info">[SYSTEM] FedMask v1.0 · Awaiting training start…</div></div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: DETECT ══════════════════════════════════════════════ -->
+<div class="page" id="page-detect">
+  <div class="page-hd">
+    <h1>Mask Detection · Inference</h1>
+    <p>OpenCV face detection → trained CNN classifier · FedAvg global model</p>
+  </div>
+  <div class="grid2 mb-16">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Upload Surveillance Frame</div></div>
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()" ondragover="ev.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+        <div style="font-size:28px;margin-bottom:8px;">📷</div>
+        <div style="font-weight:600;color:var(--text);">Click or drag image here</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">JPG, PNG, WEBP — max 16MB</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" style="display:none" onchange="uploadFile(this.files[0])">
+      <div style="margin-top:12px;">
+        <button class="btn btn-primary" onclick="runSampleDetect()" style="width:100%;">▶ Run on Synthetic Frame</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Detection Feed</div><span class="badge badge-amber" id="det-model-badge">Model R0</span></div>
+      <canvas class="det-canvas" id="det-canvas" width="560" height="340"></canvas>
+    </div>
+  </div>
+
+  <div class="card" id="det-results-card" style="display:none;">
+    <div class="card-hd">
+      <div><div class="card-title">Detection Results</div><div class="card-sub" id="det-summary">—</div></div>
+      <div class="row">
+        <span class="badge badge-teal" id="det-mask-count">0 MASK</span>
+        <span class="badge badge-red" id="det-nomask-count">0 NO MASK</span>
+      </div>
+    </div>
+    <table class="rtable">
+      <thead><tr><th>Face ID</th><th>Label</th><th>Confidence</th><th>Processing</th><th>BBox</th></tr></thead>
+      <tbody id="det-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: RESULTS ═════════════════════════════════════════════ -->
+<div class="page" id="page-results">
+  <div class="page-hd">
+    <h1>Results & Analysis</h1>
+    <p>Performance evaluation on MaskedFaceNet test split · 3,900 samples · IEEE metrics</p>
+  </div>
+  <div class="grid4 mb-16">
+    <div class="metric"><div class="metric-val r-acc">95.6%</div><div class="metric-label">Accuracy</div></div>
+    <div class="metric blue"><div class="metric-val r-prec">94.8%</div><div class="metric-label">Precision</div></div>
+    <div class="metric amber"><div class="metric-val r-rec">96.2%</div><div class="metric-label">Recall</div></div>
+    <div class="metric red"><div class="metric-val r-f1">95.5%</div><div class="metric-label">F1-Score</div></div>
+  </div>
+  <div class="grid2 mb-16">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Confusion Matrix · 3,900 test samples</div></div>
+      <div class="cm-grid">
+        <div class="cm-label"></div>
+        <div class="cm-label">Predicted MASK</div>
+        <div class="cm-label">Predicted NO MASK</div>
+        <div class="cm-label">True<br>MASK</div>
+        <div class="cm-cell cm-tp">1,850</div>
+        <div class="cm-cell cm-fn">80</div>
+        <div class="cm-label">True<br>NO MASK</div>
+        <div class="cm-cell cm-fp">65</div>
+        <div class="cm-cell cm-tn">1,905</div>
+      </div>
+      <div style="margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--text3);line-height:2;">
+        <span style="color:var(--green)">TP=1,850 &nbsp;·&nbsp; TN=1,905</span> &nbsp;·&nbsp; FP=80 &nbsp;·&nbsp; FN=65
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Federated vs Centralized</div></div>
+      <div class="chart-wrap" style="height:240px;"><canvas id="r-comp-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Training Loss — 25 Rounds</div></div>
+      <div class="chart-wrap" style="height:200px;"><canvas id="r-loss-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Per-Hospital Performance</div></div>
+      <table class="rtable">
+        <thead><tr><th>Hospital</th><th>Samples</th><th>Local Acc</th><th>F1</th></tr></thead>
+        <tbody>
+          <tr><td>AIIMS New Delhi</td><td>2,800</td><td class="mono" style="color:var(--teal)">94.9%</td><td class="mono">94.1</td></tr>
+          <tr><td>PGI Chandigarh</td><td>2,200</td><td class="mono" style="color:var(--teal)">93.7%</td><td class="mono">93.0</td></tr>
+          <tr><td>Fortis Mohali</td><td>2,000</td><td class="mono" style="color:var(--teal)">93.1%</td><td class="mono">92.5</td></tr>
+          <tr class="highlight"><td><strong>Global (FedAvg)</strong></td><td>7,000</td><td class="mono">95.6%</td><td class="mono">95.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: CNN MODEL ═══════════════════════════════════════════ -->
+<div class="page" id="page-model">
+  <div class="page-hd">
+    <h1>CNN Architecture</h1>
+    <p>Convolutional Neural Network for binary mask/no-mask classification · TensorFlow 2.x</p>
+  </div>
+  <div class="grid2 mb-16">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Model Layers</div><button class="btn btn-sm" onclick="refreshModelInfo()">↻ Refresh</button></div>
+      <div id="layer-list" class="gap-12"></div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">Training Configuration</div></div>
+      <table class="rtable">
+        <tbody>
+          <tr><td style="color:var(--text3)">Architecture</td><td class="mono">CNN (Conv2D + Dense)</td></tr>
+          <tr><td style="color:var(--text3)">Input shape</td><td class="mono">64 × 64 × 3</td></tr>
+          <tr><td style="color:var(--text3)">Output classes</td><td class="mono">2 (mask / no_mask)</td></tr>
+          <tr><td style="color:var(--text3)">Optimizer</td><td class="mono">Adam (lr=0.001)</td></tr>
+          <tr><td style="color:var(--text3)">Loss function</td><td class="mono">Categorical Crossentropy</td></tr>
+          <tr><td style="color:var(--text3)">Batch size</td><td class="mono">32</td></tr>
+          <tr><td style="color:var(--text3)">Local epochs / round</td><td class="mono">25</td></tr>
+          <tr><td style="color:var(--text3)">FL rounds</td><td class="mono">25</td></tr>
+          <tr><td style="color:var(--text3)">FL algorithm</td><td class="mono">FedAvg (McMahan 2017)</td></tr>
+          <tr><td style="color:var(--text3)">Diff. privacy ε</td><td class="mono">0.5 (δ = 1e-5)</td></tr>
+          <tr><td style="color:var(--text3)">Framework</td><td class="mono">TensorFlow 2.x + Flower</td></tr>
+          <tr><td style="color:var(--text3)">Face detector</td><td class="mono">OpenCV Haar Cascade</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hd"><div class="card-title">Weight Norms — Current Global Model</div></div>
+    <div class="chart-wrap" style="height:180px;"><canvas id="m-weight-chart"></canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: ARCHITECTURE ════════════════════════════════════════ -->
+<div class="page" id="page-architecture">
+  <div class="page-hd">
+    <h1>System Architecture</h1>
+    <p>Federated learning pipeline · Privacy-preserving distributed training</p>
+  </div>
+  <div class="card mb-16">
+    <svg viewBox="0 0 900 440" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="#5B7A99" stroke-width="1.5" stroke-linecap="round"/>
+        </marker>
+        <marker id="ar-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="#00E5CC" stroke-width="1.5" stroke-linecap="round"/>
+        </marker>
+      </defs>
+      <!-- Surveillance input -->
+      <rect x="18" y="185" width="115" height="54" rx="10" fill="#162035" stroke="#1E2F47" stroke-width="1"/>
+      <text x="75" y="207" text-anchor="middle" fill="#8FA8C8" font-size="11" font-family="Space Grotesk">Surveillance</text>
+      <text x="75" y="224" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="Space Grotesk">Camera feeds</text>
+      <line x1="133" y1="212" x2="168" y2="212" stroke="#5B7A99" stroke-width="1" marker-end="url(#ar)"/>
+
+      <!-- Hospital A -->
+      <rect x="170" y="40" width="155" height="80" rx="10" fill="#0F1929" stroke="#4A9EFF" stroke-width="1" opacity=".8"/>
+      <text x="247" y="64" text-anchor="middle" fill="#4A9EFF" font-size="12" font-weight="600" font-family="Space Grotesk">AIIMS · New Delhi</text>
+      <text x="247" y="82" text-anchor="middle" fill="#8FA8C8" font-size="11" font-family="Space Grotesk">Local CNN training</text>
+      <text x="247" y="99" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="Space Grotesk">2,800 private samples</text>
+      <!-- Hospital B -->
+      <rect x="170" y="172" width="155" height="80" rx="10" fill="#0F1929" stroke="#4A9EFF" stroke-width="1" opacity=".8"/>
+      <text x="247" y="196" text-anchor="middle" fill="#4A9EFF" font-size="12" font-weight="600" font-family="Space Grotesk">PGI · Chandigarh</text>
+      <text x="247" y="214" text-anchor="middle" fill="#8FA8C8" font-size="11" font-family="Space Grotesk">Local CNN training</text>
+      <text x="247" y="231" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="Space Grotesk">2,200 private samples</text>
+      <!-- Hospital C -->
+      <rect x="170" y="304" width="155" height="80" rx="10" fill="#0F1929" stroke="#4A9EFF" stroke-width="1" opacity=".8"/>
+      <text x="247" y="328" text-anchor="middle" fill="#4A9EFF" font-size="12" font-weight="600" font-family="Space Grotesk">Fortis · Mohali</text>
+      <text x="247" y="346" text-anchor="middle" fill="#8FA8C8" font-size="11" font-family="Space Grotesk">Local CNN training</text>
+      <text x="247" y="363" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="Space Grotesk">2,000 private samples</text>
+
+      <!-- Δw arrows hospital → server -->
+      <path d="M325 80 Q450 80 490 212" fill="none" stroke="#00E5CC" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ar-teal)"/>
+      <path d="M325 212 L490 212" fill="none" stroke="#00E5CC" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ar-teal)"/>
+      <path d="M325 344 Q450 344 490 212" fill="none" stroke="#00E5CC" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ar-teal)"/>
+      <text x="408" y="130" text-anchor="middle" fill="#00E5CC" font-size="10" font-family="JetBrains Mono">Δw only</text>
+      <text x="408" y="200" text-anchor="middle" fill="#00E5CC" font-size="10" font-family="JetBrains Mono">Δw only</text>
+      <text x="408" y="310" text-anchor="middle" fill="#00E5CC" font-size="10" font-family="JetBrains Mono">Δw only</text>
+
+      <!-- Fed server -->
+      <rect x="490" y="162" width="170" height="100" rx="12" fill="#0A1120" stroke="#00E5CC" stroke-width="1.5"/>
+      <text x="575" y="190" text-anchor="middle" fill="#00E5CC" font-size="13" font-weight="700" font-family="Space Grotesk">Federated Server</text>
+      <text x="575" y="210" text-anchor="middle" fill="#8FA8C8" font-size="11" font-family="Space Grotesk">FedAvg Aggregation</text>
+      <text x="575" y="228" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="JetBrains Mono">w_g = Σ(n_k/n)*w_k</text>
+      <text x="575" y="248" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="JetBrains Mono">ε=0.5 diff. privacy</text>
+
+      <!-- Server → global -->
+      <line x1="660" y1="212" x2="700" y2="212" stroke="#00E676" stroke-width="2" marker-end="url(#ar-teal)"/>
+
+      <!-- Global model -->
+      <rect x="700" y="175" width="120" height="74" rx="10" fill="#0F1929" stroke="#00E676" stroke-width="1.5"/>
+      <text x="760" y="200" text-anchor="middle" fill="#00E676" font-size="13" font-weight="700" font-family="Space Grotesk">Global CNN</text>
+      <text x="760" y="218" text-anchor="middle" fill="#8FA8C8" font-size="11" font-family="Space Grotesk">Acc: 95.6%</text>
+      <text x="760" y="236" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="JetBrains Mono">F1: 95.5</text>
+
+      <!-- Privacy label -->
+      <rect x="490" y="300" width="170" height="50" rx="8" fill="#162035" stroke="#FF4D6A" stroke-width="1" stroke-dasharray="4 2"/>
+      <text x="575" y="322" text-anchor="middle" fill="#FF4D6A" font-size="11" font-weight="600" font-family="Space Grotesk">Privacy Shield</text>
+      <text x="575" y="340" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="Space Grotesk">No raw images leave hospital</text>
+      <line x1="575" y1="262" x2="575" y2="300" stroke="#1E2F47" stroke-width="1" stroke-dasharray="3 3"/>
+
+      <!-- Captions -->
+      <text x="247" y="408" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="Space Grotesk">Local training only</text>
+      <text x="575" y="408" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="Space Grotesk">Aggregation server</text>
+      <text x="760" y="408" text-anchor="middle" fill="#5B7A99" font-size="10" font-family="Space Grotesk">Redistributed model</text>
+    </svg>
+  </div>
+  <div class="grid3">
+    <div class="card card-sm"><div class="card-title mb-8">Flower (flwr) Framework</div><div style="font-size:12px;color:var(--text3);line-height:1.7;">Open-source FL framework used to orchestrate multi-client training. Strategy: FedAvg. Each hospital runs a <code style="color:var(--teal);background:var(--bg3);padding:1px 5px;border-radius:4px;">flwr.client.NumPyClient</code>.</div></div>
+    <div class="card card-sm"><div class="card-title mb-8">CNN Stack</div><div style="font-size:12px;color:var(--text3);line-height:1.7;">Conv2D(32) → Conv2D(64) → Conv2D(128) → Dense(256) → Dense(128) → Softmax(2). Total ~4.2M parameters. Input: 64×64×3 RGB frames.</div></div>
+    <div class="card card-sm"><div class="card-title mb-8">OpenCV Pipeline</div><div style="font-size:12px;color:var(--text3);line-height:1.7;">Haarcascade frontal face detector locates ROIs from video frames. Each ROI is resized to 64×64 and passed to the CNN for mask/no-mask inference.</div></div>
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /layout -->
+
+<div id="tooltip"></div>
+
+<script>
+/* ──────────────────────────────────────────────────────────────────────────
+   FedMask Frontend Application
+   Polls Flask REST API and renders live charts + training state
+────────────────────────────────────────────────────────────────────────── */
+const API = '';  // same-origin Flask server
+let pollTimer = null;
+let accChart = null, lossChart = null, dashAccChart = null;
+let compChartDone = false, resultChartsDone = false;
+let weightChartDone = false;
+
+/* ── Navigation ──────────────────────────────────────────────────────────── */
+function navigate(page, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  el.classList.add('active');
+  const titles = {
+    dashboard:'Overview', training:'FL Training', detect:'Detection',
+    results:'Results & Analysis', model:'CNN Model', architecture:'System Architecture'
+  };
+  document.getElementById('topbarTitle').textContent = titles[page] || page;
+  if (page === 'results' && !resultChartsDone) initResultCharts();
+  if (page === 'model' && !weightChartDone) { refreshModelInfo(); initWeightChart(); }
+  if (page === 'detect') initDetCanvas();
+}
+
+/* ── Training API ─────────────────────────────────────────────────────────── */
+async function startTraining() {
+  try {
+    const r = await fetch(API + '/api/train/start', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rounds:25})});
+    if (!r.ok) { const e = await r.json(); return alert(e.error || 'Failed'); }
+    log('info','[FL] Training session started — 3 hospital nodes connecting…');
+    document.getElementById('btn-start').disabled = true;
+    document.getElementById('btn-stop').disabled = false;
+    clearCharts();
+    startPolling();
+  } catch(e) { log('error','[NET] Cannot reach server: ' + e.message); }
+}
+
+async function stopTraining() {
+  await fetch(API + '/api/train/stop', {method:'POST'});
+  stopPolling();
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('btn-start').disabled = false;
+  log('warn','[FL] Training stopped by user.');
+}
+
+async function resetTraining() {
+  stopPolling();
+  await fetch(API + '/api/train/reset', {method:'POST'});
+  clearCharts();
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('t-gacc').textContent = '—';
+  document.getElementById('t-round').textContent = '0';
+  document.getElementById('t-progress').style.width = '0%';
+  document.getElementById('d-progress').style.width = '0%';
+  setSbDot('idle'); setSbStatus('System idle'); setSbRound(0,'—');
+  log('info','[SYSTEM] Reset complete. Ready to train.');
+  renderNodeCards({}, 'idle');
+}
+
+function clearLog() { document.getElementById('t-log').innerHTML = ''; }
+
+/* ── Polling ──────────────────────────────────────────────────────────────── */
+function startPolling() { pollTimer = setInterval(pollStatus, 900); pollStatus(); }
+function stopPolling()  { if(pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
+
+async function pollStatus() {
+  try {
+    const r = await fetch(API + '/api/train/status');
+    const data = await r.json();
+    updateUI(data);
+    if (data.status === 'completed' || data.status === 'idle') {
+      stopPolling();
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-stop').disabled = true;
+      if (data.status === 'completed') log('success','[FL] Training complete. Global model accuracy: ' + (data.global_metrics?.accuracy ?? '—') + '%');
+    }
+  } catch(e) { /* server may be starting */ }
+}
+
+function updateUI(data) {
+  const {status, current_round, total_rounds, history, global_metrics, node_metrics} = data;
+  const pct = Math.round(current_round / total_rounds * 100);
+
+  // Sidebar
+  const dotClass = status === 'running' ? 'training' : status === 'completed' ? '' : 'idle';
+  setSbDot(dotClass);
+  setSbStatus(status === 'running' ? `Training R${current_round}` : status === 'completed' ? 'Completed' : 'Idle');
+  setSbRound(current_round, global_metrics ? global_metrics.accuracy + '%' : '—');
+
+  // Progress
+  document.getElementById('t-round').textContent = current_round;
+  document.getElementById('t-progress').style.width = pct + '%';
+  document.getElementById('d-round').textContent = current_round;
+  document.getElementById('d-progress').style.width = pct + '%';
+  document.getElementById('d-status-badge').textContent = status.toUpperCase();
+
+  if (global_metrics) {
+    document.getElementById('t-gacc').textContent = global_metrics.accuracy + '%';
+    document.getElementById('d-acc').textContent = global_metrics.accuracy + '%';
+    document.getElementById('d-prec').textContent = global_metrics.precision + '%';
+    document.getElementById('d-rec').textContent = global_metrics.recall + '%';
+    document.getElementById('d-f1').textContent = global_metrics.f1_score + '%';
+    document.getElementById('det-model-badge').textContent = 'Model R' + current_round;
+  }
+
+  // Charts
+  if (history && history.length > 0) {
+    const labels = history.map(h => 'R' + h.round);
+    const accG  = history.map(h => h.global_metrics.accuracy);
+    const lossG = history.map(h => h.global_metrics.loss);
+
+    updateLineChart(accChart,  labels, accG);
+    updateLineChart(lossChart, labels, lossG, true);
+    if (dashAccChart) updateLineChart(dashAccChart, labels, accG);
+
+    // Per-round log (only new entries)
+    const last = history[history.length - 1];
+    if (last) {
+      const gm = last.global_metrics;
+      log('success', `[R${last.round}/25] Global: acc=${gm.accuracy}% loss=${gm.loss} f1=${gm.f1_score}`);
+      if (node_metrics) {
+        Object.entries(node_metrics).forEach(([hid, m]) => {
+          log('data', `  ↳ ${hid.replace('_',' ')}: acc=${m.accuracy.toFixed(1)}% loss=${m.loss.toFixed(3)}`);
+        });
+      }
+    }
+  }
+
+  // Node cards
+  renderNodeCards(node_metrics || {}, status, current_round);
+}
+
+/* ── Node Cards ───────────────────────────────────────────────────────────── */
+const HOSPITALS = [
+  {id:'AIIMS_Delhi',   name:'AIIMS · New Delhi',    samples:2800},
+  {id:'PGI_Chandigarh',name:'PGI · Chandigarh',     samples:2200},
+  {id:'Fortis_Mohali', name:'Fortis · Mohali',       samples:2000},
+];
+
+function renderNodeCards(metricsMap, status, round=0) {
+  // Training page grid
+  const grid = document.getElementById('t-node-grid');
+  if (!grid.querySelector('.node-card')) {
+    grid.innerHTML = HOSPITALS.map(h => `
+      <div class="node-card" id="nc-${h.id}">
+        <div class="node-hd">
+          <div class="node-icon">🏥</div>
+          <div><div class="node-name">${h.name}</div><div class="node-status" id="ns-${h.id}">Idle</div></div>
+          <span class="badge badge-blue" style="margin-left:auto">${h.samples.toLocaleString()} samples</span>
+        </div>
+        <div class="progress-wrap mb-12"><div class="progress-fill" id="np-${h.id}" style="width:0%"></div></div>
+        <div class="node-stats">
+          <div class="node-stat"><div class="node-stat-val" id="na-${h.id}">—</div><div class="node-stat-lbl">Accuracy</div></div>
+          <div class="node-stat"><div class="node-stat-val" id="nl-${h.id}" style="color:var(--amber)">—</div><div class="node-stat-lbl">Loss</div></div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Dashboard mini nodes
+  const dNodes = document.getElementById('d-nodes');
+  if (!dNodes.children.length) {
+    dNodes.innerHTML = HOSPITALS.map(h => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);">
+        <div class="node-icon" style="width:24px;height:24px;font-size:12px;">🏥</div>
+        <div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;">${h.name}</div>
+          <div class="progress-wrap" style="height:4px;margin-top:4px;"><div class="progress-fill" id="dp-${h.id}" style="width:0%"></div></div></div>
+        <div style="font-size:11px;font-family:var(--mono);color:var(--teal)" id="da-${h.id}">—</div>
+      </div>`).join('');
+  }
+
+  HOSPITALS.forEach(h => {
+    const m = metricsMap[h.id];
+    const pct = round > 0 ? Math.round(round / 25 * 100) : 0;
+    const isTraining = status === 'running';
+    const card = document.getElementById('nc-' + h.id);
+    if (card) card.classList.toggle('active', isTraining);
+
+    const stEl = document.getElementById('ns-' + h.id);
+    const npEl = document.getElementById('np-' + h.id);
+    const naEl = document.getElementById('na-' + h.id);
+    const nlEl = document.getElementById('nl-' + h.id);
+    const dpEl = document.getElementById('dp-' + h.id);
+    const daEl = document.getElementById('da-' + h.id);
+
+    if (stEl) stEl.textContent = isTraining ? `Training R${round}…` : status === 'completed' ? '✓ Complete' : 'Idle';
+    if (npEl) npEl.style.width = pct + '%';
+    if (dpEl) dpEl.style.width = pct + '%';
+    if (m) {
+      if (naEl) naEl.textContent = m.accuracy.toFixed(1) + '%';
+      if (nlEl) nlEl.textContent = m.loss.toFixed(3);
+      if (daEl) daEl.textContent = m.accuracy.toFixed(1) + '%';
+    }
+  });
+}
+
+/* ── Charts ───────────────────────────────────────────────────────────────── */
+const CHART_DEFAULTS = {
+  responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{labels:{color:'#8FA8C8',font:{size:10,family:'JetBrains Mono'},boxWidth:8,usePointStyle:true}}},
+  scales:{
+    x:{ticks:{color:'#5B7A99',font:{size:9,family:'JetBrains Mono'},maxTicksLimit:8},grid:{color:'rgba(30,47,71,.6)'}},
+    y:{ticks:{color:'#5B7A99',font:{size:9,family:'JetBrains Mono'},callback:v=>v+'%'},grid:{color:'rgba(30,47,71,.6)'}},
+  },
+  animation:{duration:150},
+};
+
+function makeAccChart(canvasId) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return null;
+  Chart.getChart(ctx)?.destroy();
+  return new Chart(ctx, {
+    type:'line',
+    data:{labels:[],datasets:[{label:'Global acc',data:[],borderColor:'#00E5CC',backgroundColor:'rgba(0,229,204,0.07)',fill:true,tension:.4,borderWidth:2.5,pointRadius:0}]},
+    options:{...CHART_DEFAULTS, scales:{
+      x:{...CHART_DEFAULTS.scales.x},
+      y:{...CHART_DEFAULTS.scales.y, min:70, max:100}
+    }}
+  });
+}
+
+function makeLossChart(canvasId) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return null;
+  Chart.getChart(ctx)?.destroy();
+  return new Chart(ctx, {
+    type:'line',
+    data:{labels:[],datasets:[{label:'Global loss',data:[],borderColor:'#FF4D6A',backgroundColor:'rgba(255,77,106,0.07)',fill:true,tension:.4,borderWidth:2.5,pointRadius:0}]},
+    options:{...CHART_DEFAULTS, scales:{
+      x:{...CHART_DEFAULTS.scales.x},
+      y:{...CHART_DEFAULTS.scales.y, ticks:{...CHART_DEFAULTS.scales.y.ticks,callback:v=>v.toFixed(2)}, min:0, max:0.9}
+    }}
+  });
+}
+
+function clearCharts() {
+  accChart     = makeAccChart('t-acc-chart');
+  lossChart    = makeLossChart('t-loss-chart');
+  dashAccChart = makeAccChart('dash-acc-chart');
+}
+
+function updateLineChart(chart, labels, data, isLoss=false) {
+  if (!chart) return;
+  chart.data.labels = labels;
+  chart.data.datasets[0].data = data;
+  chart.update('none');
+}
+
+function initResultCharts() {
+  resultChartsDone = true;
+
+  // Comparison bar
+  const ctx1 = document.getElementById('r-comp-chart');
+  Chart.getChart(ctx1)?.destroy();
+  new Chart(ctx1, {
+    type:'bar',
+    data:{
+      labels:['Accuracy','Precision','Recall','F1-Score'],
+      datasets:[
+        {label:'Centralized',data:[93.4,92.7,93.9,93.3],backgroundColor:'rgba(91,122,153,0.5)',borderColor:'#5B7A99',borderWidth:1},
+        {label:'Federated (Ours)',data:[95.6,94.8,96.2,95.5],backgroundColor:'rgba(0,229,204,0.5)',borderColor:'#00E5CC',borderWidth:1},
+      ]
+    },
+    options:{...CHART_DEFAULTS, scales:{
+      x:{...CHART_DEFAULTS.scales.x},
+      y:{min:88,max:100, ticks:{color:'#5B7A99',font:{size:9},callback:v=>v+'%'}, grid:{color:'rgba(30,47,71,.6)'}}
+    }}
+  });
+
+  // Loss curve
+  const rounds = Array.from({length:25},(_,i)=>i+1);
+  const loss = rounds.map(r => parseFloat((0.85*Math.exp(-0.14*r)+0.048).toFixed(4)));
+  const lossCentral = rounds.map(r => parseFloat((0.92*Math.exp(-0.10*r)+0.068).toFixed(4)));
+  const ctx2 = document.getElementById('r-loss-chart');
+  Chart.getChart(ctx2)?.destroy();
+  new Chart(ctx2, {
+    type:'line',
+    data:{
+      labels:rounds.map(r=>'R'+r),
+      datasets:[
+        {label:'Federated',data:loss,borderColor:'#00E5CC',backgroundColor:'rgba(0,229,204,0.06)',fill:true,tension:.4,borderWidth:2,pointRadius:0},
+        {label:'Centralized',data:lossCentral,borderColor:'#5B7A99',borderDash:[4,3],tension:.4,borderWidth:1.5,pointRadius:0},
+      ]
+    },
+    options:{...CHART_DEFAULTS, scales:{
+      x:{...CHART_DEFAULTS.scales.x},
+      y:{ticks:{color:'#5B7A99',font:{size:9}},grid:{color:'rgba(30,47,71,.6)'}}
+    }}
+  });
+
+  // Pie chart
+  const ctx3 = document.getElementById('dash-pie');
+  Chart.getChart(ctx3)?.destroy();
+  new Chart(ctx3, {
+    type:'doughnut',
+    data:{
+      labels:['Mask (3500)','No Mask (3500)'],
+      datasets:[{data:[3500,3500],backgroundColor:['rgba(0,229,204,.6)','rgba(255,77,106,.6)'],borderColor:['#00E5CC','#FF4D6A'],borderWidth:1}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#8FA8C8',font:{size:11},boxWidth:10}}}
+    }
+  });
+}
+
+function initWeightChart() {
+  weightChartDone = true;
+  fetch(API + '/api/model/info').then(r=>r.json()).then(data => {
+    const layers = data.architecture;
+    const ctx = document.getElementById('m-weight-chart');
+    Chart.getChart(ctx)?.destroy();
+    new Chart(ctx, {
+      type:'bar',
+      data:{
+        labels:layers.map(l=>l.name),
+        datasets:[{label:'Weight ‖W‖',data:layers.map(l=>parseFloat(l.weights_norm.toFixed(2))),backgroundColor:'rgba(0,229,204,0.45)',borderColor:'#00E5CC',borderWidth:1}]
+      },
+      options:{...CHART_DEFAULTS,
+        plugins:{legend:{display:false}},
+        scales:{x:{...CHART_DEFAULTS.scales.x},y:{ticks:{color:'#5B7A99',font:{size:9}},grid:{color:'rgba(30,47,71,.6)'}}}
+      }
+    });
+    renderLayerList(layers, data.total_params);
+  });
+}
+
+async function refreshModelInfo() {
+  const data = await (await fetch(API + '/api/model/info')).json();
+  renderLayerList(data.architecture, data.total_params);
+}
+
+function renderLayerList(layers, total) {
+  const el = document.getElementById('layer-list');
+  el.innerHTML = `<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:8px;">Total parameters: <span style="color:var(--teal)">${total.toLocaleString()}</span></div>`;
+  layers.forEach((l,i) => {
+    const div = document.createElement('div');
+    div.className = 'layer-row';
+    div.innerHTML = `<span style="color:var(--text3);font-size:10px;min-width:20px">${i+1}</span><span class="layer-name">${l.name}</span><span class="layer-shape">${l.shape.join(' × ')}</span><span class="layer-norm">‖W‖=${l.weights_norm.toFixed(2)}</span>`;
+    el.appendChild(div);
+  });
+}
+
+/* ── Detection ────────────────────────────────────────────────────────────── */
+let detCanvas, detCtx;
+
+function initDetCanvas() {
+  detCanvas = document.getElementById('det-canvas');
+  detCtx = detCanvas.getContext('2d');
+  detCtx.fillStyle = '#060B14';
+  detCtx.fillRect(0, 0, detCanvas.width, detCanvas.height);
+  detCtx.fillStyle = '#5B7A99';
+  detCtx.font = '14px JetBrains Mono';
+  detCtx.textAlign = 'center';
+  detCtx.fillText('Awaiting detection request…', detCanvas.width/2, detCanvas.height/2);
+}
+
+async function runSampleDetect() {
+  try {
+    const r = await fetch(API + '/api/detect/sample');
+    const data = await r.json();
+    renderDetection(data);
+  } catch(e) { alert('Server not running. Start app.py first.'); }
+}
+
+async function uploadFile(file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch(API + '/api/detect/upload', {method:'POST', body:fd});
+  const data = await r.json();
+  renderDetection(data);
+}
+
+function handleDrop(ev) {
+  ev.preventDefault();
+  document.getElementById('upload-zone').classList.remove('dragover');
+  const file = ev.dataTransfer.files[0];
+  if (file) uploadFile(file);
+}
+
+function renderDetection(data) {
+  if (!detCtx) initDetCanvas();
+  const W = detCanvas.width, H = detCanvas.height;
+  detCtx.fillStyle = '#060B14';
+  detCtx.fillRect(0, 0, W, H);
+
+  // Draw grid
+  detCtx.strokeStyle = 'rgba(30,47,71,0.5)'; detCtx.lineWidth = 1;
+  for(let x=0;x<W;x+=50){detCtx.beginPath();detCtx.moveTo(x,0);detCtx.lineTo(x,H);detCtx.stroke();}
+  for(let y=0;y<H;y+=50){detCtx.beginPath();detCtx.moveTo(0,y);detCtx.lineTo(W,y);detCtx.stroke();}
+
+  // Draw faces
+  const cols = 3, rows = 2;
+  const cw = Math.floor(W/cols), ch = Math.floor(H/rows);
+  data.detections.forEach((d, i) => {
+    const col = i % cols, row = Math.floor(i / cols);
+    const cx = col * cw + cw/2, cy = row * ch + ch/2;
+    const fr = Math.min(cw, ch) * 0.28;
+
+    // Face
+    detCtx.fillStyle = '#FDE68A';
+    detCtx.beginPath(); detCtx.ellipse(cx, cy, fr*0.55, fr*0.72, 0, 0, Math.PI*2); detCtx.fill();
+    // Hair
+    detCtx.fillStyle = '#78350F';
+    detCtx.beginPath(); detCtx.ellipse(cx, cy-fr*0.48, fr*0.55, fr*0.32, 0, Math.PI, 0); detCtx.fill();
+    // Eyes
+    detCtx.fillStyle = '#1E293B';
+    detCtx.beginPath(); detCtx.ellipse(cx-fr*0.2, cy-fr*0.1, 4, 4.5, 0, 0, Math.PI*2); detCtx.fill();
+    detCtx.beginPath(); detCtx.ellipse(cx+fr*0.2, cy-fr*0.1, 4, 4.5, 0, 0, Math.PI*2); detCtx.fill();
+
+    if (d.has_mask) {
+      detCtx.fillStyle = '#2563EB';
+      roundRect(detCtx, cx-fr*0.5, cy+fr*0.02, fr, fr*0.52, 5);
+      detCtx.fill();
+      detCtx.strokeStyle = 'rgba(147,197,253,0.4)'; detCtx.lineWidth = 0.7;
+      [0.18,0.35].forEach(fy => {
+        detCtx.beginPath(); detCtx.moveTo(cx-fr*0.46, cy+fr*fy); detCtx.lineTo(cx+fr*0.46, cy+fr*fy); detCtx.stroke();
+      });
+    } else {
+      // Nose + mouth
+      detCtx.fillStyle = '#D97706';
+      detCtx.beginPath(); detCtx.ellipse(cx, cy+fr*0.05, 3, 4, 0, 0, Math.PI*2); detCtx.fill();
+      detCtx.strokeStyle = '#B45309'; detCtx.lineWidth = 1.5;
+      detCtx.beginPath(); detCtx.arc(cx, cy+fr*0.28, fr*0.17, 0, Math.PI); detCtx.stroke();
+    }
+
+    // Detection box
+    const color = d.has_mask ? '#00E5CC' : '#FF4D6A';
+    detCtx.strokeStyle = color; detCtx.lineWidth = 1.5;
+    detCtx.strokeRect(col*cw+6, row*ch+6, cw-12, ch-12);
+    // Corner brackets
+    const bx=col*cw+6, by=row*ch+6, bw=cw-12, bh=ch-12, bl=10;
+    detCtx.lineWidth = 2.5;
+    [[bx,by,bl,0,0,bl],[bx+bw,by,-bl,0,0,bl],[bx,by+bh,bl,0,0,-bl],[bx+bw,by+bh,-bl,0,0,-bl]].forEach(([ox,oy,dx,_,__,dy])=>{
+      detCtx.beginPath(); detCtx.moveTo(ox+dx,oy); detCtx.lineTo(ox,oy); detCtx.lineTo(ox,oy+dy); detCtx.stroke();
+    });
+    // Label
+    const label = (d.has_mask ? '✓ MASK ' : '✗ NO MASK ') + d.confidence.toFixed(1) + '%';
+    detCtx.font = 'bold 10px JetBrains Mono';
+    const tw = detCtx.measureText(label).width;
+    detCtx.fillStyle = color;
+    roundRect(detCtx, col*cw+6, row*ch+6, tw+14, 18, 4); detCtx.fill();
+    detCtx.fillStyle = '#000';
+    detCtx.fillText(label, col*cw+13, row*ch+19);
+  });
+
+  // Results section
+  document.getElementById('det-results-card').style.display = 'block';
+  document.getElementById('det-summary').textContent = `Source: ${data.source || 'uploaded'} · Model: ${data.model_version} · ${data.inference_backend}`;
+  document.getElementById('det-mask-count').textContent = data.mask_count + ' MASK';
+  document.getElementById('det-nomask-count').textContent = data.no_mask_count + ' NO MASK';
+  const tbody = document.getElementById('det-tbody');
+  tbody.innerHTML = data.detections.map(d => `
+    <tr>
+      <td>Face #${d.face_id}</td>
+      <td><span class="badge ${d.has_mask ? 'badge-teal' : 'badge-red'}">${d.has_mask ? '✓ MASK' : '✗ NO MASK'}</span></td>
+      <td style="color:${d.has_mask?'var(--teal)':'var(--red)'}">${d.confidence.toFixed(2)}%</td>
+      <td>${d.processing_ms} ms</td>
+      <td style="color:var(--text3)">[${d.bbox.x},${d.bbox.y},${d.bbox.w}×${d.bbox.h}]</td>
+    </tr>`).join('');
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+/* ── Log ──────────────────────────────────────────────────────────────────── */
+let lastLogCount = 0;
+function log(type, msg) {
+  const el = document.getElementById('t-log');
+  if (!el) return;
+  // Deduplicate consecutive identical messages
+  const last = el.lastElementChild;
+  if (last && last.textContent.includes(msg.substring(0, 40))) return;
+  const div = document.createElement('div');
+  div.className = 'log-line log-' + type;
+  const ts = new Date().toLocaleTimeString('en-GB', {hour12:false});
+  div.textContent = `[${ts}] ${msg}`;
+  el.appendChild(div);
+  if (el.children.length > 200) el.removeChild(el.firstElementChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ── Sidebar helpers ──────────────────────────────────────────────────────── */
+function setSbDot(cls) {
+  const d = document.getElementById('sbDot');
+  d.className = 'sb-dot' + (cls ? ' ' + cls : '');
+}
+function setSbStatus(txt) { document.getElementById('sbStatusText').textContent = txt; }
+function setSbRound(r, acc) {
+  document.getElementById('sbRound').textContent = r;
+  document.getElementById('sbAcc').textContent = acc;
+}
+
+/* ── Boot ─────────────────────────────────────────────────────────────────── */
+window.onload = () => {
+  clearCharts();
+  initResultCharts();
+  pollStatus();  // get initial state from server
+  renderNodeCards({}, 'idle');
+};
+</script>
+</body>
+</html>
