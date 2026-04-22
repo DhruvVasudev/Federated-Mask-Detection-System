@@ -169,6 +169,10 @@ http://127.0.0.1:5000
 
 > <img width="2559" height="814" alt="image" src="https://github.com/user-attachments/assets/68715bcf-1217-4b5f-8082-c2d49a336ac1" />
 
+<img width="2559" height="1317" alt="image" src="https://github.com/user-attachments/assets/a5f9af7a-8a84-441c-a859-3345ab0e9bf2" />
+
+<img width="2559" height="946" alt="image" src="https://github.com/user-attachments/assets/279520ce-e921-4c30-b17f-8f122a53bbab" />
+
 
 ---
 
