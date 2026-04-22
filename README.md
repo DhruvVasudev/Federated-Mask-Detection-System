@@ -167,7 +167,8 @@ http://127.0.0.1:5000
 
 ## 📸 Demo
 
-> Upload an image or run synthetic detection to see results in real-time.
+> <img width="2559" height="814" alt="image" src="https://github.com/user-attachments/assets/68715bcf-1217-4b5f-8082-c2d49a336ac1" />
+
 
 ---
 
